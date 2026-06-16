@@ -1,28 +1,68 @@
 use cudarc::driver::DriverError;
 use lmrs_kernels::*;
+use std::time::{Duration, Instant};
 
 fn main() -> Result<(), DriverError> {
     println!("discovered kernels: {:?}", kernel_names());
 
     let n = 1024usize;
-
+    let iters = 1_000usize;
     let a = vec![1.0f32; n];
     let b = vec![2.0f32; n];
-    let out = vector_add(&a, &b, n as i32)?;
-    println!("vector_add[0..4] = {:?} (expect 3.0)", &out[..4]);
 
-    let x = vec![1.0f32; n];
-    let mut y = vec![1.0f32; n];
-    saxpy(3.0, &x, &mut y, n as i32)?;
-    println!("saxpy[0..4] = {:?} (expect 4.0)", &y[..4]);
+    let regular = time_regular(&a, &b, n, iters)?;
+    let graph = time_graph(&a, &b, n, iters)?;
 
-    let mut data = vec![2.0f32; n];
-    scale(&mut data, 5.0, n as i32)?;
-    println!("scale[0..4] = {:?} (expect 10.0)", &data[..4]);
-
-    let mut buf = vec![0.0f32; n];
-    fill(&mut buf, 7.0, n as i32)?;
-    println!("fill[0..4] = {:?} (expect 7.0)", &buf[..4]);
+    println!(
+        "regular tensor launches: {:?} / iter",
+        regular / iters as u32
+    );
+    println!("cuda graph replay:       {:?} / iter", graph / iters as u32);
 
     Ok(())
+}
+
+fn time_regular(a: &[f32], b: &[f32], n: usize, iters: usize) -> Result<Duration, DriverError> {
+    let rt = Runtime::default()?;
+    let d_a = rt.upload(a)?;
+    let d_b = rt.upload(b)?;
+    let mut d_out = rt.zeros::<f32>(n)?;
+    let mut d_y = rt.zeros::<f32>(n)?;
+
+    rt.synchronize()?;
+    let start = Instant::now();
+    for _ in 0..iters {
+        rt.vector_add(&d_a, &d_b, &mut d_out)?;
+        rt.saxpy(3.0, &d_out, &mut d_y)?;
+        rt.scale(&mut d_y, 5.0)?;
+    }
+    rt.synchronize()?;
+    Ok(start.elapsed())
+}
+
+fn time_graph(a: &[f32], b: &[f32], n: usize, iters: usize) -> Result<Duration, DriverError> {
+    let rt = Runtime::default()?;
+    let d_a = rt.upload(a)?;
+    let d_b = rt.upload(b)?;
+    let mut d_out = rt.zeros::<f32>(n)?;
+    let mut d_y = rt.zeros::<f32>(n)?;
+
+    rt.vector_add(&d_a, &d_b, &mut d_out)?;
+    rt.saxpy(3.0, &d_out, &mut d_y)?;
+    rt.scale(&mut d_y, 5.0)?;
+    rt.synchronize()?;
+
+    let graph = rt.capture_graph(|rt| {
+        rt.vector_add(&d_a, &d_b, &mut d_out)?;
+        rt.saxpy(3.0, &d_out, &mut d_y)?;
+        rt.scale(&mut d_y, 5.0)
+    })?;
+    rt.synchronize()?;
+
+    let start = Instant::now();
+    for _ in 0..iters {
+        graph.launch()?;
+    }
+    rt.synchronize()?;
+    Ok(start.elapsed())
 }
