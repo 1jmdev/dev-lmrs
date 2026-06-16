@@ -3,4 +3,13 @@ members = ["crates/kernels"]
 resolver = "3"
 
 [workspace.dependencies]
-cudarc = { version = "0.19.7", features = ["nvrtc"] }
+lmrs-kernels = { path = "crates/kernels" }
+
+cudarc = { version = "0.19.7", default-features = false, features = [
+    "driver",
+    "nvrtc",
+    "dynamic-loading",
+    "fallback-latest",
+    "cuda-13020"
+] }
+thiserror = "2"

@@ -1,14 +1,12 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! Auto-generated safe wrappers over CUDA kernels discovered at build time.
+//!
+//! Usage:
+//! ```no_run
+//! let a = vec![1.0f32; 1024];
+//! let b = vec![2.0f32; 1024];
+//! let out = lmrs_kernels::vector_add(&a, &b, 1024)?;
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+// Pull in everything build.rs emitted
+include!(concat!(env!("OUT_DIR"), "/gen_kernels.rs"));
