@@ -1,0 +1,7 @@
+[package]
+name = "lmrs-kernels"
+version = "0.0.1"
+edition = "2024"
+
+[dependencies]
+cudarc.workspace = true

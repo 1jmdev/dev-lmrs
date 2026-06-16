@@ -1,0 +1,6 @@
+[workspace]
+members = ["crates/kernels"]
+resolver = "3"
+
+[workspace.dependencies]
+cudarc = { version = "0.19.7", features = ["nvrtc"] }
