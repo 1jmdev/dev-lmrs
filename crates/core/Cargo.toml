@@ -1,0 +1,11 @@
+[package]
+name = "lmrs-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+lmrs-kernels.workspace = true
+cudarc.workspace = true
+half.workspace = true
+smallvec.workspace = true
+thiserror.workspace = true

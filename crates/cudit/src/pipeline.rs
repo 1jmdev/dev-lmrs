@@ -1,7 +1,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::compile::{compile_native_cuda, compile_ptx, discover_cuda_files, read_cuda_source};
+use crate::compile::{
+    compile_native_cuda, compile_ptx, discover_cuda_files, discover_cuda_lib_dir, read_cuda_source,
+};
 use crate::config::Config;
 use crate::error::{CuditError, Result};
 use crate::generate::generate_api;
@@ -137,8 +139,12 @@ pub fn generate(config: Config) -> Result<GeneratedApi> {
     {
         if config.emit_cargo_directives {
             println!("cargo:rustc-link-search=native={}", native_dir.display());
-            println!("cargo:rustc-link-lib=dylib=lmrs_cuda_native");
-            println!("cargo:rustc-link-arg=-Wl,-rpath,{}", native_dir.display());
+            if let Some(cuda_lib_dir) = discover_cuda_lib_dir() {
+                println!("cargo:rustc-link-search=native={}", cuda_lib_dir.display());
+            }
+            println!("cargo:rustc-link-lib=static=lmrs_cuda_native");
+            println!("cargo:rustc-link-lib=dylib=cublas");
+            println!("cargo:rustc-link-lib=dylib=cudart");
         }
     }
 

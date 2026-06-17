@@ -1,10 +1,11 @@
 [workspace]
-members = ["crates/cudit","crates/kernels"]
+members = ["crates/core","crates/cudit","crates/kernels"]
 resolver = "3"
 
 [workspace.dependencies]
 lmrs-kernels = { path = "crates/kernels" }
 lmrs-cudit = { path = "crates/cudit" }
+lmrs-core = { path = "crates/core" }
 
 cudarc = { version = "0.19.7", default-features = false, features = [
     "driver",
@@ -17,3 +18,4 @@ cudarc = { version = "0.19.7", default-features = false, features = [
 half = "2"
 walkdir = "2"
 thiserror = "2"
+smallvec = "1"

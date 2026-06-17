@@ -118,19 +118,60 @@ pub(crate) fn compile_native_cuda(
         objects.push(obj);
     }
 
-    let shared = native_dir.join(format!("lib{lib_name}.so"));
+    let archive = native_dir.join(format!("lib{lib_name}.a"));
     let nvcc = std::env::var("CUDA_NVCC").unwrap_or_else(|_| "nvcc".to_string());
     let mut args = vec![
-        "-shared".to_string(),
+        "-lib".to_string(),
         "-o".to_string(),
-        shared.to_string_lossy().into_owned(),
+        archive.to_string_lossy().into_owned(),
     ];
     args.extend(objects.iter().map(|obj| obj.to_string_lossy().into_owned()));
-    args.push("-lcublas".to_string());
-    args.push("-lcudart".to_string());
-    run_command(&shared, &nvcc, &args)?;
+    run_command(&archive, &nvcc, &args)?;
 
     Ok(Some(native_dir))
+}
+
+pub(crate) fn discover_cuda_lib_dir() -> Option<PathBuf> {
+    std::env::var_os("CUDA_HOME")
+        .or_else(|| std::env::var_os("CUDA_PATH"))
+        .map(PathBuf::from)
+        .and_then(cuda_lib_dir_from_root)
+        .or_else(|| {
+            std::env::var_os("CUDA_NVCC")
+                .map(PathBuf::from)
+                .and_then(cuda_lib_dir_from_nvcc)
+        })
+        .or_else(|| find_in_path("nvcc").and_then(cuda_lib_dir_from_nvcc))
+}
+
+fn cuda_lib_dir_from_nvcc(nvcc: PathBuf) -> Option<PathBuf> {
+    let nvcc = if nvcc.is_absolute() {
+        nvcc
+    } else {
+        find_in_path(nvcc.as_os_str())?
+    };
+    let root = nvcc.parent()?.parent()?.to_path_buf();
+    cuda_lib_dir_from_root(root)
+}
+
+fn cuda_lib_dir_from_root(root: PathBuf) -> Option<PathBuf> {
+    ["lib64", "lib"]
+        .into_iter()
+        .map(|dir| root.join(dir))
+        .find(|path| path.is_dir())
+}
+
+fn find_in_path(program: impl AsRef<std::ffi::OsStr>) -> Option<PathBuf> {
+    let program = program.as_ref();
+    let path = PathBuf::from(program);
+    if path.components().count() > 1 {
+        return path.is_file().then_some(path);
+    }
+    std::env::var_os("PATH")?
+        .to_string_lossy()
+        .split(':')
+        .map(|dir| Path::new(dir).join(program))
+        .find(|path| path.is_file())
 }
 
 pub(crate) fn read_cuda_source(source_file: &Path) -> Result<String> {
