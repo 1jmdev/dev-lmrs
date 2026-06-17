@@ -11,7 +11,9 @@ cudarc = { version = "0.19.7", default-features = false, features = [
     "nvrtc",
     "dynamic-loading",
     "fallback-latest",
+    "f16",
     "cuda-13020"
 ] }
+half = "2"
 walkdir = "2"
 thiserror = "2"

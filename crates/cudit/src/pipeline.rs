@@ -1,12 +1,12 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::compile::{compile_ptx, discover_cuda_files, read_cuda_source};
+use crate::compile::{compile_native_cuda, compile_ptx, discover_cuda_files, read_cuda_source};
 use crate::config::Config;
 use crate::error::{CuditError, Result};
 use crate::generate::generate_api;
-use crate::model::KernelFile;
-use crate::parser::parse_kernels;
+use crate::model::{KernelFile, NativeFile};
+use crate::parser::{parse_kernels, parse_native_functions};
 
 /// Summary of files and kernels produced by a generation run.
 #[derive(Debug)]
@@ -84,6 +84,8 @@ pub fn generate(config: Config) -> Result<GeneratedApi> {
     fs::create_dir_all(&config.out_dir).map_err(|err| CuditError::io(&config.out_dir, err))?;
     let cu_files = discover_cuda_files(&config.kernels_dir)?;
     let mut files = Vec::new();
+    let mut native_files = Vec::new();
+    let mut native_source_files = Vec::new();
     let mut ptx_files = Vec::new();
 
     for source_path in cu_files {
@@ -92,6 +94,19 @@ pub fn generate(config: Config) -> Result<GeneratedApi> {
         }
 
         let source = read_cuda_source(&source_path)?;
+        let functions = parse_native_functions(&source).map_err(|(kernel, message)| {
+            CuditError::ParseKernel {
+                source_file: source_path.clone(),
+                kernel,
+                message,
+            }
+        })?;
+        if !functions.is_empty() {
+            native_files.push(NativeFile { functions });
+            native_source_files.push(source_path);
+            continue;
+        }
+
         let orig_stem = source_path
             .file_stem()
             .and_then(|stem| stem.to_str())
@@ -117,7 +132,17 @@ pub fn generate(config: Config) -> Result<GeneratedApi> {
         });
     }
 
-    let generated_source = generate_api(&config, &files);
+    if let Some(native_dir) =
+        compile_native_cuda(&config, &native_source_files, "lmrs_cuda_native")?
+    {
+        if config.emit_cargo_directives {
+            println!("cargo:rustc-link-search=native={}", native_dir.display());
+            println!("cargo:rustc-link-lib=dylib=lmrs_cuda_native");
+            println!("cargo:rustc-link-arg=-Wl,-rpath,{}", native_dir.display());
+        }
+    }
+
+    let generated_source = generate_api(&config, &files, &native_files);
     let generated_file = config.out_dir.join(&config.generated_file_name);
     fs::write(&generated_file, generated_source)
         .map_err(|err| CuditError::io(&generated_file, err))?;
@@ -125,6 +150,11 @@ pub fn generate(config: Config) -> Result<GeneratedApi> {
     let kernel_names = files
         .iter()
         .flat_map(|file| file.kernels.iter().map(|kernel| kernel.name.clone()))
+        .chain(
+            native_files
+                .iter()
+                .flat_map(|file| file.functions.iter().map(|function| function.name.clone())),
+        )
         .collect();
 
     Ok(GeneratedApi {

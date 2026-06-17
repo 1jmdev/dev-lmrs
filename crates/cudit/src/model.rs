@@ -19,3 +19,8 @@ pub(crate) struct KernelFile {
     pub(crate) ptx_name: String,
     pub(crate) kernels: Vec<Kernel>,
 }
+
+#[derive(Debug)]
+pub(crate) struct NativeFile {
+    pub(crate) functions: Vec<Kernel>,
+}

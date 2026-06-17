@@ -11,6 +11,17 @@ pub(crate) fn parse_kernels(src: &str) -> Result<Vec<Kernel>, (String, String)> 
     Ok(kernels)
 }
 
+pub(crate) fn parse_native_functions(src: &str) -> Result<Vec<Kernel>, (String, String)> {
+    let mut functions = Vec::new();
+    for (name, params_str) in find_native_functions(src) {
+        match parse_params(&params_str) {
+            Ok(params) => functions.push(Kernel { name, params }),
+            Err(message) => return Err((name, message)),
+        }
+    }
+    Ok(functions)
+}
+
 fn strip_comments(src: &str) -> String {
     let chars: Vec<char> = src.chars().collect();
     let mut out = String::with_capacity(src.len());
@@ -86,6 +97,47 @@ fn find_kernels(src: &str) -> Vec<(String, String)> {
     res
 }
 
+fn find_native_functions(src: &str) -> Vec<(String, String)> {
+    let src = strip_comments(src);
+    let mut res = Vec::new();
+    let mut from = 0;
+
+    while let Some(rel) = src[from..].find("extern \"C\"") {
+        let after_extern = from + rel + "extern \"C\"".len();
+        let rest = src[after_extern..].trim_start();
+        if rest.starts_with("__global__") {
+            from = after_extern;
+            continue;
+        }
+        if !(rest.starts_with("int ") || rest.starts_with("void ")) {
+            from = after_extern;
+            continue;
+        }
+        if let Some(prel) = src[after_extern..].find('(') {
+            let open = after_extern + prel;
+            let before = src[after_extern..open].trim_end();
+            let name: String = before
+                .chars()
+                .rev()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect();
+
+            if let Some(close) = matching_paren(&src, open) {
+                if !name.is_empty() {
+                    res.push((name, src[open + 1..close].to_string()));
+                }
+                from = close + 1;
+                continue;
+            }
+        }
+        from = after_extern;
+    }
+    res
+}
+
 fn split_params(s: &str) -> Vec<String> {
     let mut parts = Vec::new();
     let mut depth = 0i32;
@@ -128,6 +180,7 @@ fn is_type_keyword(t: &str) -> bool {
             | "size_t"
             | "bool"
             | "half"
+            | "cudaStream_t"
             | "const"
             | "volatile"
     )
@@ -150,6 +203,9 @@ fn map_base_type(base: &str) -> Option<&'static str> {
         "unsigned char" => "u8",
         "size_t" => "usize",
         "bool" => "bool",
+        "half" => "half::f16",
+        "void" => "std::ffi::c_void",
+        "cudaStream_t" => "std::ffi::c_void",
         _ => return None,
     })
 }

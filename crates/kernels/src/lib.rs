@@ -5,12 +5,10 @@
 //! use cudarc::driver::DriverError;
 //!
 //! let rt = lmrs_kernels::Runtime::default()?;
-//! let a = vec![1.0f32; 1024];
-//! let b = vec![2.0f32; 1024];
-//! let a = rt.upload(&a)?;
-//! let b = rt.upload(&b)?;
-//! let mut out = rt.zeros::<f32>(1024)?;
-//! rt.vector_add(&a, &b, &mut out)?;
+//! let x = vec![half::f16::from_f32(1.0); 1024];
+//! let x = rt.upload(&x)?;
+//! let mut y = rt.zeros::<half::f16>(1024)?;
+//! rt.fp16_silu(&mut y, &x)?;
 //! rt.synchronize()?;
 //! # Ok::<(), DriverError>(())
 //! ```

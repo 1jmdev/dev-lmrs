@@ -42,6 +42,19 @@ pub enum CuditError {
         error: cudarc::nvrtc::CompileError,
     },
 
+    /// Native CUDA compilation or archiving failed.
+    #[error("native CUDA command failed for `{source_file}`: {program} {args:?}\n{stderr}")]
+    NativeCompile {
+        /// CUDA source file being compiled.
+        source_file: PathBuf,
+        /// Program that failed.
+        program: String,
+        /// Arguments passed to the program.
+        args: Vec<String>,
+        /// Captured stderr.
+        stderr: String,
+    },
+
     /// A CUDA kernel parameter could not be parsed into a Rust API type.
     #[error("failed to parse kernel `{kernel}` in `{source_file}`: {message}")]
     ParseKernel {
